@@ -1,39 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const CHROMIUM_PATH =
-  "https://github.com/Sparticuz/chromium/releases/download/v140.0.0/chromium-v140.0.0-pack.x64.tar";
-
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+
+const CHROMIUM_PATH =
+  "https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar";
 
 async function getBrowser() {
-  const chromium = (await import("@sparticuz/chromium")).default;
-  const puppeteer = (await import("puppeteer-core")).default;
-
-  const executablePath = await chromium.executablePath();
-  return puppeteer.launch({
-    args: chromium.args,
-    defaultViewport: chromium.defaultViewport,
-    executablePath,
-    headless: true,
-  });
-}
-
-export async function GET(req: NextRequest) {
-  const u = new URL(req.url);
-  const target = u.searchParams.get("url") ?? "https://example.com";
-
-  const browser = await getBrowser();
-  try {
-    const page = await browser.newPage();
-    await page.setUserAgent(
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Safari"
+  if (process.env.VERCEL_ENV === "production") {
+    const chromium = await import("@sparticuz/chromium-min").then(
+      (mod) => mod.default
     );
-    await page.goto(target, { waitUntil: "domcontentloaded", timeout: 20000 });
-    const pdf = await page.pdf({ printBackground: true });
-    return new NextResponse(pdf, { headers: { "Content-Type": "application/pdf" } });
-  } finally {
-    await browser.close();
+
+    const puppeteerCore = await import("puppeteer-core").then(
+      (mod) => mod.default
+    );
+
+    const executablePath = await chromium.executablePath(CHROMIUM_PATH);
+
+    const browser = await puppeteerCore.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath,
+      headless: chromium.headless,
+    });
+    return browser;
+  } else {
+    const puppeteer = await import("puppeteer").then((mod) => mod.default);
+
+    const browser = await puppeteer.launch();
+    return browser;
   }
+
+
+
+
+
+
+
+
 }
+
+export async function GET(request: NextRequest) {
+  const browser = await getBrowser();
+
+
+  const page = await browser.newPage();
+  await page.goto("https://example.com");
+  const pdf = await page.pdf();
+  await browser.close();
+  return new NextResponse(pdf, {
+    headers: {
+      "Content-Type": "application/pdf",
+    },
+  });
